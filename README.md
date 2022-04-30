@@ -150,8 +150,8 @@ The only metadata that can be overwritten is `title`. Titles will be loaded in t
 A "sidecar" metadata file, is a YAML file with the same name of the associated archive, but with extension `.yml`:
 
 ```txt
-CAP-0259.5.yml
-CAP-0259.5.zip
+CAP-0299.5.yml
+CAP-0299.5.zip
 ```
 
 A "folder" metadata file is a YAML file in the same folder of the archives that you can use to specify additional
@@ -174,7 +174,7 @@ files:
 
     # force the title and add additional tags
 
-    "CAP-0259.5":
+    "CAP-0299.5":
         title: ~Welcome to Natsu's house~
         tags: [ extra ]
 ```
