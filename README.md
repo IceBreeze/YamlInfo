@@ -9,18 +9,6 @@ I uploaded this in response to request, but it wasn't supposed to be shared beca
 a slightly different philosophy for file management, yet it's really flexible and I like it more than others.
 So don't expect anything shiny :)
 
-# Requirements
-
-This plugin requires the library `YAML::XS`.
-
-If you are using LANraragi with Docker, you need to recreate your image using this Dockerfile:
-
-```dockerfile
-FROM difegue/lanraragi
-
-RUN apk add --quiet --no-progress --no-cache perl-yaml-libyaml
-```
-
 # The metadata file content
 
 The content of the metadata file is basically a list of tags.
