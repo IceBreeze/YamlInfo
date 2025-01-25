@@ -7,9 +7,8 @@ use Data::Dumper;
 use File::Basename;
 use List::Util qw(uniq);
 use Mojo::File;
-use Mojo::JSON qw(decode_json encode_json);
-use Mojo::Util qw(html_unescape);
-use YAML::XS qw( LoadFile );
+use Mojo::JSON qw(encode_json);
+use YAML::XS   qw( LoadFile );
 
 use LANraragi::Model::Plugins;
 use LANraragi::Utils::Archive qw(is_file_in_archive extract_file_from_archive);
@@ -26,53 +25,59 @@ sub plugin_info {
         type        => "metadata",
         namespace   => "yi-plugin",
         author      => "IceBreeze",
-        version     => "0.2",
-        description => "Loads metadata from YAML files stored in folders or embedded in the archives.",
-        parameters  => [
-            { type => "string", desc => "Custom metadata file name (default: 'comic-info.yml')" },
-            { type => "string", desc => "Custom metadata embedded file name (default: 'comic-info.yml')" },
-            { type => "bool",   desc => "Convert tags to lowercase" },
-            { type => "bool",   desc => "Replace the title with the one in the metadata file" },
-            { type => "bool",   desc => "Include embedded metadata" },
-            { type => "bool",   desc => "Search for metadata in the parent folders" }
-        ],
-        icon => "data:image/png;base64,"
-          . "iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAIAAAAC64paAAAAAXNSR0IArs4c6QAA"
-          . "AARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABZSURBVDhPzY5J"
-          . "CgAhDATzSl+e/2irOUjQSFzQog5hhqIl3uBEHPxIXK7oFXwVE+Hj5IYX4lYVtN6M"
-          . "UW4tGw5jNdjdt5bLkwX1q2rFU0/EIJ9OUEm8xquYOQFEhr9vvu2U8gAAAABJRU5E"
-          . "rkJggg=="
+        version     => "0.5",
+        description => "Loads metadata from YAML (.yml) files.<BR>"
+          . "YAML files can be:<BR>"
+          . "- embedded in the archive<BR>"
+          . "- associated with an archive with the same name (excluding the extension)<BR>"
+          . "- associated to all files in the folder",
+
+        to_named_params => [ 'meta_filename', 'meta_embedded', 'use_lowercase', 'replace_title', 'get_embedded', 'check_parent' ],
+        parameters      => {
+            'meta_filename' => {
+                type    => "string",
+                default => $DEFAULT_METAFILE,
+                desc    => "Custom metadata file name (default: '${DEFAULT_METAFILE}')"
+            },
+            'meta_embedded' => {
+                type    => "string",
+                default => $DEFAULT_METAFILE,
+                desc    => "Custom metadata embedded file name (default: '${DEFAULT_METAFILE}')"
+            },
+            'use_lowercase' => { type => "bool", desc => "Convert tags to lowercase" },
+            'replace_title' => { type => "bool", desc => "Replace the title with the one in the metadata file" },
+            'get_embedded'  => { type => "bool", desc => "Include embedded metadata" },
+            'check_parent'  => { type => "bool", desc => "Search for metadata in the parent folders" }
+        },
+
+        icon => 'data:image/svg+xml;base64,'
+          . 'PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIw'
+          . 'MDAvc3ZnIiBmaWxsPSJjdXJyZW50Q29sb3IiPgogPGcgaWQ9IkxheWVyXzEiPgogIDx0aXRsZT5Z'
+          . 'PC90aXRsZT4KICA8ZWxsaXBzZSBmaWxsPSIjRTZDMzZBIiBzdHJva2Utd2lkdGg9IjAiIGN4PSIy'
+          . 'NTYiIGN5PSIyNTUiIGlkPSJzdmdfMSIgcng9IjI1NSIgcnk9IjI1NSIvPgogIDx0ZXh0IGZpbGw9'
+          . 'IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMCIgeD0iMTI4LjMxNTA4IiB5PSIzOTAuOTg1ODIiIGlk'
+          . 'PSJzdmdfNCIgZm9udC1zaXplPSIyNTAiIGZvbnQtZmFtaWx5PSInTm90byBTYW5zIE1vbm8nIiB0'
+          . 'ZXh0LWFuY2hvcj0ic3RhcnQiIHhtbDpzcGFjZT0icHJlc2VydmUiIHRyYW5zZm9ybT0icm90YXRl'
+          . 'KDAuMDEzMDA0NSwgMjU2LjE2NCwgMjUwLjk1NCkgbWF0cml4KDEuODI5OTksIDAsIDAsIDEuNjY3'
+          . 'NSwgLTEyMC42NDcsIC0yMzkuNDc2KSIgZm9udC1zdHlsZT0ibm9ybWFsIiBmb250LXdlaWdodD0i'
+          . 'Ym9sZCI+WTwvdGV4dD4KIDwvZz4KCjwvc3ZnPg=='
     );
 
 }
 
 sub get_tags {
+    my ( undef, $lrr_info, $params ) = @_;
+
     my $logger = get_plugin_logger();
 
-    # better handled in the caller
-    my %hashdata = eval { internal_get_tags(@_); };
-    if ($@) {
-        $logger->error($@);
-        return ( error => $@ );
-    }
+    my $archive = Mojo::File->new( $lrr_info->{file_path} );
 
-    $logger->info( "Sending the following tags to LRR: " . $hashdata{tags} );
-    return %hashdata;
-}
+    $logger->info("Searching tags for ${archive}");
 
-sub internal_get_tags {
-    my $params = read_and_validate_params(@_);
-    my $logger = get_plugin_logger();
-
-    my $archive = $params->{archive};
-
-    $logger->info( 'Searching tags for "' . $archive->to_string . '"' );
-
-    my $data = load_metadata_from_files( $params, $archive );
+    my $data = load_metadata( $params, $archive );
     $logger->info( "Loaded metadatas: " . encode_json($data) ) if $data;
 
     my @tags = get_all_tags( $data, $archive->basename );
-
     @tags = map { lc } @tags if ( $params->{use_lowercase} );
 
     my %hashdata = ( tags => join( ', ', @tags ) );
@@ -82,35 +87,25 @@ sub internal_get_tags {
         $hashdata{title} = $title if ($title);
     }
 
+    $logger->info( "Sending the following tags to LRR: " . $hashdata{tags} );
     return %hashdata;
 }
 
-sub read_and_validate_params {
-    my %params;
-    my $lrr_info = $_[1];
-    $params{archive}       = Mojo::File->new( $lrr_info->{file_path} );
-    $params{meta_name}     = $_[2] || $DEFAULT_METAFILE;
-    $params{meta_name_emb} = $_[3] || $DEFAULT_METAFILE;
-    $params{use_lowercase} = $_[4];
-    $params{replace_title} = $_[5];
-    $params{get_embedded}  = $_[6];
-    $params{check_parent}  = $_[7];
-    return \%params;
-}
-
-sub load_metadata_from_files {
+sub load_metadata {
     my ( $params, $archive ) = @_;
 
-    my $folder   = $archive->dirname;
-    my $sidecar  = $archive->basename( $archive->extname ) . "yml";
-    my $data_dir = $ENV{LRR_DATA_DIRECTORY} || '/';
-    my $count    = 0;
+    my $folder        = $archive->dirname;
+    my $sidecar       = $archive->basename( $archive->extname ) . "yml";
+    my $data_dir      = $ENV{LRR_DATA_DIRECTORY} || '/';
+    my $metafile_name = $params->{meta_filename} || $DEFAULT_METAFILE;
+    my $embedded_name = $params->{meta_embedded} || $DEFAULT_METAFILE;
 
     my %data;
-    $data{sidecar} = load_metadatas_from_yaml_file( $folder, $sidecar );
-    $data{file}    = load_metadata_from_archive( "$archive", $params->{meta_name_emb} ) if ( $params->{get_embedded} );
+    $data{sidecar}  = load_metadatas_from_yaml_file( $folder, $sidecar );
+    $data{embedded} = load_metadata_from_archive( "$archive", $embedded_name ) if ( $params->{get_embedded} );
+    my $count = 0;
     do {
-        $data{ "dir" . $count++ } = load_metadatas_from_yaml_file( $folder, $params->{meta_name} );
+        $data{ "dir" . $count++ } = load_metadatas_from_yaml_file( $folder, $metafile_name );
         $folder = dirname($folder);
     } while ( $params->{check_parent} && $folder ne $data_dir );
 
@@ -135,10 +130,7 @@ sub load_metadata_from_archive {
 
 sub get_all_tags {
     my ( $data, $filename ) = @_;
-    my @tags;
-    while ( my ( $k, $v ) = each %$data ) {
-        push( @tags, get_tags_from_metadata( $v, $filename ) ) if ($v);
-    }
+    my @tags = map { get_tags_from_metadata( $_, $filename ) } values %$data;
     return uniq(@tags);
 }
 
@@ -146,14 +138,13 @@ sub get_tags_from_metadata {
     my ( $data, $filename ) = @_;
     my @tags;
 
-    #get_plugin_logger()->info(Dumper($data));
     while ( my ( $k, $v ) = each %$data ) {
         next if ( !$v );
         my $v_type = ref $v;
 
         # order does matter!
-        if ( $k eq 'files' ) { push( @tags, get_metadata_associated_to_file( $filename, $v ) ) if ($filename); }
-        elsif ( $v_type eq 'HASH' )  { next; }                                                # skip any unknown structure
+        if    ( $k eq 'files' )      { push( @tags, get_metadata_associated_to_file( $filename, $v ) ) if ($filename); }
+        elsif ( $v_type eq 'HASH' )  { next; }    # skip any unknown structure
         elsif ( $k eq 'tags' )       { push( @tags, @$v ); }
         elsif ( $v_type eq 'ARRAY' ) { push( @tags, get_array_with_namespace( $k, $v ) ); }
         elsif ( $k eq 'title' )      { next; }
@@ -179,16 +170,9 @@ sub get_array_with_namespace {
     return map { "$namespace:$_" } @$list;
 }
 
-sub get_tags_from_reference {
-    my ( $ref_value, $ref_folder ) = @_;
-
-    my $data = load_metadata_from_yaml_file("$ref_folder/$ref_value.yml");
-    return get_tags_from_metadata($data);
-}
-
 sub get_archive_title {
     my ( $data, $filename ) = @_;
-    my $title = $data->{file}{title};
+    my $title = $data->{embedded}{title};
     $title = $data->{sidecar}{title}                                   if ( !$title );
     $title = $data->{dir0}{files}{$filename}{title}                    if ( !$title );
     $title = $data->{dir0}{files}{ strip_extension($filename) }{title} if ( !$title );
