@@ -1,85 +1,144 @@
-# YamlInfo
-A simple plugin for LANraragi to read metadata from YAML formatted files.
+⚠️ **Upgrading to Version 1.0**
 
-- because YAML is simpler to read and write if compared to XML and JSON
-- because I don't like how other projects force me to work with a rigid file system structure, 
-  even if I know that LANraragi it's not the best solution, at least at the time I'm writing this, to read chapters in sequence.
+If you're upgrading to version 1.0, please refer to the [Breaking Changes](#breaking-changes) section.
+
+# YamlInfo
+
+This is a simple plugin for LANraragi that reads metadata from YAML-formatted files.
+
+- YAML is easier to read and write compared to XML or JSON.
+- Unlike other projects that enforce rigid file system structures, this plugin offers flexibility. While LANraragi may not be the best solution for reading chapters in sequence (at least at the time of writing), it provides a more adaptable approach.
 
 I uploaded this in response to request, but it wasn't supposed to be shared because the project to which it refers is based on
 a slightly different philosophy for file management, yet it's really flexible and I like it more than others.
 So don't expect anything shiny :)
 
-# The metadata file content
+---
 
-The content of the metadata file is basically a list of tags.
+# Metadata File Content
 
-Every tag must have a namespace and there is no restriction on the namespaces you can use.
+The metadata file consists of key-value pairs. The keys are used as namespaces under which the tags are categorized.
 
-Every namespace can be a string or an array.
-
-There are only three special (lets call them) `keywords`:
-
-- `title` : if present, must always be a string
-- `tags` : if present, must always be an array and every item under this "namespace" will end up as a tag without namespace in LANraragi
-- `files` : if present, must be an hash. It's used to append additional tags or force titles to the archive in the same folder of the YAML file
-
-With YAML rules, you can format your file in different ways. For example, the following expressions are equivalent:
+You can use any names for the keys, and both scalar and array values will be loaded.
 
 ```yaml
 ---
 title: Sword Art Online
+summary: Trapped in a deadly VR game, Kirito must fight to survive and escape
+  with many other players.
 serie: [ Sword Art Online, SAO ]
 author: Kawahara Reki
 artist: Nakamura Tamako
 category: manga
 genre: [ Action, Adventure, Drama, Romance, Sci-Fi, Fantasy, Slice of Life ]
 theme: [ Video Games ]
-demographic: Shounen 
+demographic: Shounen
 status: completed
 publication: 2010
 tags: [ adaptation ]
 ```
 
-```yaml
----
-title: Sword Art Online
-serie:
-    - Sword Art Online
-    - SAO
-author: Kawahara Reki
-artist: Nakamura Tamako
-category: manga
-genre:
-    - Action
-    - Adventure
-    - Drama
-    - Romance
-    - Sci-Fi
-    - Fantasy
-    - Slice of Life
-theme: Video Games
-demographic: Shounen 
-status: completed
-publication: 2010
-tags:
-    - adaptation
-```
+### Exceptions
 
-`tags` also let you express a list of tags like you would in LANraragi, so the above list could also be written as:
+Some keys have specific requirements: `archives`, `description`, `files`, `summary`, `tags`, `title` and `url`.
+
+#### `title`, `description` and `summary`
+
+These keys must always be strings if present. Furthermore `description` and `summary` are mutually exclusive. You can specify which one to import in the plugin settings.
+
+#### `tags`
+
+This key must always be an array. Each item will be added as a tag without a namespace in LANraragi.
+
+Alternatively, you can use `tags` to define namespaced tags, as shown below:
 
 ```yaml
 ---
 title: Sword Art Online
+summary: Trapped in a deadly VR game, Kirito must fight to survive and escape
+  with many other players.
 tags: [ serie:Sword Art Online, serie:SAO, author:Kawahara Reki, artist:Nakamura Tamako,
         category:manga, genre:Action, genre:Adventure, genre:Drama, genre:Romance, genre:Sci-Fi,
         genre:Fantasy, genre:Slice of Life, theme:Video Games, demographic:Shounen,
         status:completed, publication:2010, adaptation ]
 ```
 
-The plugin allows you to read metadata files (by default `comic-info.yml`) recursively from the file system. The tags loaded from the
-YAML files are merged together and passed to LANraragi.
+The resulting list of tags in LANraragi will not change.
 
-For example, if you like to organize your folders by "series" like this:
+#### `archives` and `files`
+
+These keys must be hashes.
+
+Starting with version 1.0, `archives` replaces `files`, which is now deprecated.
+
+If you're managing multiple archives with a single metadata file, you can specify archive-specific tags under `archives` without creating separate sidecar files.
+
+A "sidecar" metadata file is a YAML file with the same name as the associated archive but with a `.yaml` extension:
+
+```txt
+CAP-0299.5.yaml
+CAP-0299.5.zip
+```
+
+Example of usage of `archives`:
+
+```yaml
+---
+title: Fairy Tail
+genre: [ Action, Adventure, Comedy, Fantasy ]
+themes: [ Magic, Supernatural ]
+demographic: Shounen
+
+archives:
+  "CAP-0299.5":
+    title: ~Welcome to Natsu's house~
+    tags: [ extra ]
+```
+
+#### `url`
+
+This key stores URLs, which are loaded into LANraragi under the `source` namespace by default.
+
+It can be a scalar, array, or hash:
+
+```yaml
+url: http://site1/...
+
+# or
+
+url:
+- http://site1/...
+- http://site2/...
+
+# or
+
+url:
+  site1: http://site1/...
+  site2: http://site2/...
+```
+
+If using the hash format, you can filter URLs by enabling the "*Use dot notation for the URL field*" parameter.
+This way the urls are returned as:
+
+```txt
+url.site1: http://site1/...
+url.site2: http://site2/...
+```
+
+Now you can use LANraragi's "Tag Rules" to handle the different sites. For example with the following set of rules you can discard "site1" and return "site2" under the `source` namespace:
+
+```txt
+-url.site1:*
+url.site1:* => source:*
+```
+
+---
+
+# Recursively Loading Metadata from Parent Folders
+
+The plugin can recursively read metadata files (default: `comic-info.yaml`) from the file system. Tags from these files are merged and passed to LANraragi.
+
+For example, if your folder structure is organized by series:
 
 ```txt
 |- SAO
@@ -88,9 +147,9 @@ For example, if you like to organize your folders by "series" like this:
    |- ...
 ```
 
-you can configure your metadata files like this:
+You can configure metadata files like this:
 
-`SAO/comic-info.yml`
+`SAO/comic-info.yaml`
 
 ```yaml
 ---
@@ -99,7 +158,7 @@ category: manga
 genre: [ Action, Adventure, Drama, Romance, Sci-Fi, Fantasy, Slice of Life ]
 ```
 
-`SAO/01-SAO-Aincrad/comic-info.yml`
+`SAO/01-SAO-Aincrad/comic-info.yaml`
 
 ```yaml
 ---
@@ -111,7 +170,7 @@ category: adaptation
 theme: [ Video Games ]
 ```
 
-`SAO/02-SAO-Fairy Dance/comic-info.yml`
+`SAO/02-SAO-Fairy Dance/comic-info.yaml`
 
 ```yaml
 ---
@@ -123,47 +182,33 @@ category: adaptation
 theme: [ Video Games ]
 ```
 
-The namespace `category` in the example above contains `manga` in the parent folder and `adaptation` in the last folder.
-The resulting `category` will have both.
+In this example, the `category` namespace will include both `manga` (from the parent folder) and `adaptation` (from the subfolder). The only metadata that can be overridden are `title`, `description` and `summary`, in the following order of priority:
 
-The only metadata that can be overwritten is `title`. Titles will be loaded in this order:
+1. Embedded metadata (if enabled in preferences)
+2. Sidecar metadata
+3. Folder metadata
 
-```txt
-- embedded metadata (if enabled in the preferences)
-- sidecar metadata
-- folder metadata
-- parent folder (recursively)
-```
-
-A "sidecar" metadata file, is a YAML file with the same name of the associated archive, but with extension `.yml`:
-
-```txt
-CAP-0299.5.yml
-CAP-0299.5.zip
-```
-
-A "folder" metadata file is a YAML file in the same folder of the archives that you can use to specify additional
-tags for some or all the archives present in place of the sidecar file (I wasn't sure which one I would rather use, so I left all the options).
-Anyway this is where you would use the last keyword `files`.
-
-As previously said, `files` is an hash and its keys are the names of the archives (with or without the extension) in the same folder,
-while the value is another hash containing additional tags.
-
-For example:
-
-```yaml
 ---
-title: Fairy Tail
-genre: [ Action, Adventure, Comedy, Fantasy ] 
-themes: [ Magic, Supernatural ]
-demographic: Shounen 
 
-files:
+# Breaking Changes
 
-    # force the title and add additional tags
+Version 1.0 introduces two breaking changes to improve compatibility with the YAML format used by CCDC06. I decided to support it because it's the only source of metadata in YAML I discovered so far.
 
-    "CAP-0299.5":
-        title: ~Welcome to Natsu's house~
-        tags: [ extra ]
-```
+1. **Default File Extension**
 
+   The default file extension is now `.yaml` instead of `.yml` (as recommended by YAML specifications).
+   To use the old file name, set `comic-info.yml` in the plugin parameters ("*Custom metadata file name*").
+   Alternatively, rename all metadata files using the following command (should work from inside the container if you don't have the volume mounted readonly):
+
+   ```bash
+   # remove "echo" only if you know what you are doing!
+   find content/ -depth -name "*.yml" -exec sh -c 'echo mv -vi "$1" "${1%.yml}.yaml"' _ {} \;
+   ```
+
+   If you have metadata files inside the archives, you have to edit them manually or you can specify the old file name using the parameter "*Custom metadata embedded file name*".
+
+   Be cautious when renaming files inside archives, as this may alter their hash.
+
+2. **Deprecation of `files` Key**
+
+   The `files` key is now deprecated in favor of `archives`. While `files` is still supported, it is recommended to update existing metadata to use `archives`.
