@@ -28,7 +28,7 @@ sub plugin_info {
         type        => "metadata",
         namespace   => "yi-plugin",
         author      => "IceBreeze",
-        version     => "1.0",
+        version     => "1.0.1",
         description => "Loads metadata from YAML (.yaml) files.<BR>"
           . "YAML files can be:<BR>"
           . "- embedded in the archive<BR>"
@@ -86,7 +86,7 @@ sub get_tags {
     $logger->info("Searching tags for ${archive}");
 
     my $data = load_metadata( $params, $archive );
-    $logger->info( "Loaded metadatas: " . encode_json($data) ) if $data;
+    $logger->debug( "Loaded metadatas: " . encode_json($data) ) if $data;
 
     my @tags = get_all_tags( $data, $archive->basename, $params );
     @tags = map { lc } @tags if ( $params->{use_lowercase} );
@@ -208,20 +208,20 @@ sub get_array_with_namespace {
 sub get_archive_title {
     my ( $data, $filename ) = @_;
     my $title = $data->{embedded}{title};
-    $title = $data->{sidecar}{title}                                   if ( !$title );
-    $title = $data->{dir0}{files}{$filename}{title}                    if ( !$title );
-    $title = $data->{dir0}{files}{ strip_extension($filename) }{title} if ( !$title );
-    $title = $data->{dir0}{title}                                      if ( !$title );
+    $title = $data->{sidecar}{title}                                         if ( !$title );
+    $title = $data->{dir0}{archives}{ lc $filename }{title}                  if ( !$title );
+    $title = $data->{dir0}{archives}{ lc strip_extension($filename) }{title} if ( !$title );
+    $title = $data->{dir0}{title}                                            if ( !$title );
     return $title;
 }
 
 sub get_archive_summary {
     my ( $data, $filename, $summary_field ) = @_;
     my $summary = $data->{embedded}{$summary_field};
-    $summary = $data->{sidecar}{$summary_field}                                   if ( !$summary );
-    $summary = $data->{dir0}{files}{$filename}{$summary_field}                    if ( !$summary );
-    $summary = $data->{dir0}{files}{ strip_extension($filename) }{$summary_field} if ( !$summary );
-    $summary = $data->{dir0}{$summary_field}                                      if ( !$summary );
+    $summary = $data->{sidecar}{$summary_field}                                         if ( !$summary );
+    $summary = $data->{dir0}{archives}{ lc $filename }{$summary_field}                  if ( !$summary );
+    $summary = $data->{dir0}{archives}{ lc strip_extension($filename) }{$summary_field} if ( !$summary );
+    $summary = $data->{dir0}{$summary_field}                                            if ( !$summary );
     return $summary;
 }
 
